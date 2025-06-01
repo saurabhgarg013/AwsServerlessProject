@@ -1,0 +1,90 @@
+
+
+In the Asynchronous invocation section, find Retry attempts and Destinations:
+Retry attempts: Set to 2 (click Edit, enter 2, and save).
+Destinations:
+Under On failure, click Edit.
+Destination type: Select SQS queue.
+Destination: Choose OrderProcessingDLQ from the dropdown (it should appear if the queue exists in ap-south-1).
+If OrderProcessingDLQ doesn’t appear, ensure the queue is created (Step 2) or manually enter the ARN: arn:aws:sqs:ap-south-1:480482295683:OrderProcessingDLQ.
+Click Save.	
+
+
+arn:aws:sns:ap-south-1:0655000000:OrderConfirmationTopic
+arn:aws:sns:ap-south-1:0655000000:OrderProcessingAlerts  
+
+ProcessOrderLambda invokes UpdateInventory and SendEmail asynchronously (InvocationType='Event'), meaning it doesn’t wait for their completion. This configuration ensures failures are handled gracefully.
+System Reliability: Without retries and a DLQ, failed events could be lost, breaking the order processing flow (e.g., missing transaction logs in InventoryTransactions).
+
+If UpdateInventory fails (e.g., can’t write to InventoryTransactions), it retries 2 times, then sends the event to OrderProcessingDLQ.
+OrderProcessingDLQ as the On failure destination for UpdateInventory under Configuration > Asynchronous invocation > Destinations:
+On failure: SQS queue (OrderProcessingDLQ).
+On failure: An exception is raised, triggering the SNS alert and, after 2 retries, sending the event to OrderProcessingDLQ
+
+In the Asynchronous invocation section, find Retry attempts.
+Check that it’s set to 2.
+If not, click Edit (next to Retry attempts), enter 2, and click Save.
+Console Visual: The Retry attempts field shows a number (e.g., 2) with an Edit but
+
+Under Destinations, look for On failure:
+It should display SQS queue with OrderProcessingDLQ (or its ARN: arn:aws:sqs:ap-south-1:480482295683:OrderProcessingDLQ).
+
+Create DynamoDB Tables
+You need two DynamoDB tables:
+
+Inventory: Stores item stock levels.
+InventoryTransactions: Logs inventory updates for each order.
+
+
+Table 1: Inventory
+
+Table Name: Inventory
+Partition Key: item_id (String)
+Attributes: quantity (Number)
+
+Table 2: InventoryTransactions
+
+Table Name: InventoryTransactions
+Partition Key: order_id (String)
+Sort Key: item_id (String)
+Attributes: quantity (Number), timestamp (String)
+
+
+IAM Role: Created with permissions for Lambda, DynamoDB, SES, SQS, SNS.
+API Gateway: POST endpoint created and deployed.
+
+
+API step
+
+Create a New REST API REST API, select Build (choose the “REST”)
+API name: Enter EcommerceAPI
+Endpoint Type: Select Regional
+Description: (Optional) Enter “API for e-commerce order processing”.
+
+Create a Resource (/orders)
+Click Actions  and select Create Resource.
+Resource Name: Enter orders.
+Resource Path: Automatically set to /orders.
+
+Create a POST Method
+Select the /orders resource in the resources tree.
+Click Actions > Create Method.
+
+Configure the POST method:
+Integration type: Select Lambda Function.
+Use Lambda Proxy integration: Check this box (this passes the full HTTP request to the Lambda function, simplifying the setup).
+Lambda Region: Select us-east-1 (or your region).
+Lambda Function: Type or select ProcessOrder (ensure the ProcessOrder Lambda exists from previous steps).
+Use Default Timeout: Leave checked.
+
+Select the /orders resource.
+Click Actions > Enable CORS.
+Click Enable CORS and replace existing CORS headers.
+Confirm by clicking Yes, replace existing values.
+
+Deploy the API
+n the Resources pane, click Actions > Deploy API.
+Configure the deployment:
+Deployment stage: Select New Stage.
+Stage name: Enter prod.
+Stage description: (Optional) Enter “Production stage”.
